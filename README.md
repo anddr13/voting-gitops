@@ -30,12 +30,13 @@ Each wave starts only after the previous one is Healthy. That requires an Applic
 
 ## Differences between clouds
 
-| | Azure (AKS) | AWS (EKS) | GCP (GKE) |
-|---|---|---|---|
-| Load balancer for Traefik | Azure LB, TCP health probes | NLB (`aws-load-balancer-type: nlb`) | external passthrough NLB |
-| StorageClass | `managed-csi` | `gp3` (created by Terraform, EBS CSI) | `standard-rwo` |
+| | Azure (AKS) | AWS (EKS) | GCP (GKE) | kind (local) |
+|---|---|---|---|---|
+| Load balancer for Traefik | Azure LB, TCP health probes | NLB (`aws-load-balancer-type: nlb`) | external passthrough NLB | none: NodePort 30080 → `localhost:8090` |
+| StorageClass | `managed-csi` | `gp3` (created by Terraform, EBS CSI) | `standard-rwo` | `standard` (local-path) |
 
-Everything else is identical. That is the point of the GitOps layer: the same charts run on all three clouds.
+Everything else is identical. That is the point of the GitOps layer: the same charts run on all three clouds,
+and on a laptop through [voting-infra-local](https://github.com/anddr13/voting-infra-local) for free.
 
 ## Releases
 

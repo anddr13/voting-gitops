@@ -1,0 +1,21 @@
+applications:
+  traefik:
+    values:
+      service:
+        spec:
+          # kind has no cloud load balancer: voting-infra-local maps this NodePort to localhost:8090.
+          type: NodePort
+      ports:
+        web:
+          nodePort: 30080
+      providers:
+        kubernetesIngress:
+          # A NodePort Service has no address to copy into Ingress status, and Argo CD reports
+          # an Ingress without one as Progressing forever. Publish localhost instead.
+          publishedService:
+            enabled: false
+          ingressEndpoint:
+            ip: 127.0.0.1
+  voting:
+    values:
+      cloudName: kind
