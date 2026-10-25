@@ -1,0 +1,5 @@
+apiVersion: v2
+name: data
+description: Kafka (via the Strimzi operator), Redis and MongoDB for the voting app
+type: application
+version: 0.1.0

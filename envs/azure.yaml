@@ -1,0 +1,13 @@
+applications:
+  traefik:
+    values:
+      service:
+        annotations:
+          # Plain TCP health probes; HTTP probes on "/" can mark Traefik unhealthy.
+          service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol: tcp
+  data:
+    values:
+      storageClass: managed-csi
+  voting:
+    values:
+      cloudName: azure

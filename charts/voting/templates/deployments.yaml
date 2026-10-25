@@ -1,0 +1,79 @@
+{{- range $name, $svc := .Values.services }}
+{{- $autoscaled := and $svc.autoscaling $svc.autoscaling.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "voting.labels" (dict "name" $name "root" $) | nindent 4 }}
+spec:
+  {{- if not $autoscaled }}
+  replicas: {{ $svc.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "voting.selectorLabels" $name | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "voting.labels" (dict "name" $name "root" $) | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: {{ $name }}
+          image: "{{ $.Values.image.registry }}/voting-{{ $name }}:{{ $.Values.image.tag }}"
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: KAFKA_BROKERS
+              value: {{ $.Values.kafka.brokers | quote }}
+            - name: KAFKA_TOPIC
+              value: {{ $.Values.kafka.topic | quote }}
+            - name: KAFKA_GROUP_ID
+              value: {{ $.Values.kafka.groupId | quote }}
+            - name: REDIS_URL
+              value: {{ $.Values.redis.url | quote }}
+            - name: MONGO_URL
+              value: {{ $.Values.mongo.url | quote }}
+            - name: VOTE_OPTIONS
+              value: {{ $.Values.voteOptions | quote }}
+            - name: CLOUD_NAME
+              value: {{ $.Values.cloudName | quote }}
+            - name: APP_VERSION
+              value: {{ $.Values.image.tag | quote }}
+            {{- range $key, $value := $svc.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}

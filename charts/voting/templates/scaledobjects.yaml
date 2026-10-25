@@ -1,0 +1,27 @@
+{{- range $name, $svc := .Values.services }}
+{{- if and $svc.autoscaling $svc.autoscaling.enabled }}
+---
+# KEDA owns the replica count: it scales the worker on Kafka consumer lag.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ $name }}
+spec:
+  scaleTargetRef:
+    name: {{ $name }}
+  minReplicaCount: {{ $svc.autoscaling.minReplicas }}
+  maxReplicaCount: {{ $svc.autoscaling.maxReplicas }}
+  pollingInterval: 15
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: {{ $.Values.kafka.brokers }}
+        consumerGroup: {{ $.Values.kafka.groupId }}
+        topic: {{ $.Values.kafka.topic }}
+        lagThreshold: {{ $svc.autoscaling.lagThreshold | quote }}
+        # Must match the worker: a new consumer group starts from the earliest offset.
+        offsetResetPolicy: earliest
+        # Protocol version for KEDA's client; Kafka 4 dropped the pre-2.1 protocol versions.
+        version: "4.0.0"
+{{- end }}
+{{- end }}

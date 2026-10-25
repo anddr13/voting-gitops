@@ -1,0 +1,5 @@
+apiVersion: v2
+name: voting
+description: vote-api, worker and result-api of the voting app
+type: application
+version: 0.1.0

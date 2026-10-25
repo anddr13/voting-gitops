@@ -1,0 +1,7 @@
+applications:
+  data:
+    values:
+      storageClass: standard-rwo
+  voting:
+    values:
+      cloudName: gcp

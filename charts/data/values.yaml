@@ -1,0 +1,33 @@
+# Empty = the cluster's default StorageClass. Set per cloud in envs/<cloud>.yaml.
+storageClass: ""
+
+kafka:
+  name: voting
+  version: 4.3.1
+  metadataVersion: 4.3-IV0
+  storageSize: 10Gi
+  resources:
+    requests: { cpu: 250m, memory: 1Gi }
+    limits: { memory: 1Gi }
+  heap: 512m
+
+topics:
+  votes:
+    partitions: 6
+    retentionMs: 86400000
+  votes-dlq:
+    partitions: 1
+    retentionMs: 604800000
+
+redis:
+  image: redis:8.6-alpine
+  resources:
+    requests: { cpu: 25m, memory: 64Mi }
+    limits: { memory: 128Mi }
+
+mongo:
+  image: mongo:8.0
+  storageSize: 10Gi
+  resources:
+    requests: { cpu: 100m, memory: 512Mi }
+    limits: { memory: 768Mi }

@@ -1,0 +1,65 @@
+gitops:
+  repoURL: https://github.com/anddr13/voting-gitops.git
+  targetRevision: main
+
+# Sync waves: operators (0) -> Kafka/Redis/Mongo (1) -> the app (2).
+# A wave starts only after the previous one is Healthy (see the Application health check
+# that Terraform adds to argocd-cm).
+applications:
+  traefik:
+    wave: 0
+    namespace: traefik
+    serverSideApply: true
+    chart:
+      repoURL: https://traefik.github.io/charts
+      name: traefik
+      version: 42.1.3
+    values:
+      ingressClass:
+        enabled: true
+        isDefaultClass: true
+      service:
+        annotations: {}
+      resources:
+        requests: { cpu: 50m, memory: 64Mi }
+        limits: { memory: 256Mi }
+
+  keda:
+    wave: 0
+    namespace: keda
+    # KEDA and Strimzi CRDs are too large for client-side apply (last-applied annotation limit).
+    serverSideApply: true
+    chart:
+      repoURL: https://kedacore.github.io/charts
+      name: keda
+      version: 2.21.0
+    values: {}
+
+  strimzi:
+    wave: 0
+    namespace: strimzi
+    serverSideApply: true
+    chart:
+      repoURL: https://strimzi.io/charts/
+      name: strimzi-kafka-operator
+      version: 1.3.0
+    values:
+      watchAnyNamespace: true
+      # Single-replica Kafka on spot nodes: a PDB would only block node upgrades.
+      generatePodDisruptionBudget: false
+
+  data:
+    wave: 1
+    namespace: voting
+    path: charts/data
+    skipDryRunOnMissingResource: true
+    values:
+      storageClass: ""
+
+  voting:
+    wave: 2
+    namespace: voting
+    path: charts/voting
+    skipDryRunOnMissingResource: true
+    values:
+      cloudName: local

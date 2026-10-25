@@ -1,0 +1,53 @@
+{{- range $name, $app := .Values.applications }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $name }}
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: {{ $app.wave | quote }}
+  # Deleting the Application also deletes what it deployed (incl. LoadBalancer Services and PVCs),
+  # which is what the pre-destroy script in the infra repos relies on.
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    {{- if $app.chart }}
+    repoURL: {{ $app.chart.repoURL }}
+    chart: {{ $app.chart.name }}
+    targetRevision: {{ $app.chart.version | quote }}
+    {{- else }}
+    repoURL: {{ $.Values.gitops.repoURL }}
+    targetRevision: {{ $.Values.gitops.targetRevision }}
+    path: {{ $app.path }}
+    {{- end }}
+    helm:
+      releaseName: {{ $name }}
+      {{- with $app.values }}
+      valuesObject:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ $app.namespace }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 10
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
+    syncOptions:
+      - CreateNamespace=true
+      {{- if $app.serverSideApply }}
+      - ServerSideApply=true
+      {{- end }}
+      {{- if $app.skipDryRunOnMissingResource }}
+      - SkipDryRunOnMissingResource=true
+      {{- end }}
+{{- end }}

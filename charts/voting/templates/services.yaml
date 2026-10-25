@@ -1,0 +1,18 @@
+{{- range $name, $svc := .Values.services }}
+{{- if $svc.http }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "voting.labels" (dict "name" $name "root" $) | nindent 4 }}
+spec:
+  selector:
+    {{- include "voting.selectorLabels" $name | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+{{- end }}
+{{- end }}

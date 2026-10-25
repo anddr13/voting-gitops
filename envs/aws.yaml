@@ -1,0 +1,14 @@
+applications:
+  traefik:
+    values:
+      service:
+        annotations:
+          # NLB instead of the legacy Classic Load Balancer.
+          service.beta.kubernetes.io/aws-load-balancer-type: nlb
+  data:
+    values:
+      # Created by Terraform in voting-infra-aws (EBS CSI driver, gp3).
+      storageClass: gp3
+  voting:
+    values:
+      cloudName: aws
