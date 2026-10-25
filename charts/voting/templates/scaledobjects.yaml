@@ -15,7 +15,8 @@ spec:
   triggers:
     - type: kafka
       metadata:
-        bootstrapServers: {{ $.Values.kafka.brokers }}
+        # KEDA's operator lives in the keda namespace, so a short service name would not resolve.
+        bootstrapServers: {{ include "voting.kafkaBrokersFQDN" $ }}
         consumerGroup: {{ $.Values.kafka.groupId }}
         topic: {{ $.Values.kafka.topic }}
         lagThreshold: {{ $svc.autoscaling.lagThreshold | quote }}
