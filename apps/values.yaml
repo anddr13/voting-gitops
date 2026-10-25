@@ -34,6 +34,15 @@ applications:
       name: keda
       version: 2.21.0
     values: {}
+    # Expected drift, not something to fight: AKS's admissions enforcer adds a namespaceSelector to every
+    # webhook (keeping kube-system out), and KEDA injects its own caBundle when it rotates certificates.
+    # Without this the app flaps OutOfSync on AKS while selfHeal and AKS undo each other.
+    ignoreDifferences:
+      - group: admissionregistration.k8s.io
+        kind: ValidatingWebhookConfiguration
+        jqPathExpressions:
+          - .webhooks[]?.namespaceSelector
+          - .webhooks[]?.clientConfig.caBundle
 
   strimzi:
     wave: 0

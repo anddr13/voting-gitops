@@ -32,6 +32,10 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ $app.namespace }}
+  {{- with $app.ignoreDifferences }}
+  ignoreDifferences:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   syncPolicy:
     automated:
       prune: true
@@ -49,5 +53,9 @@ spec:
       {{- end }}
       {{- if $app.skipDryRunOnMissingResource }}
       - SkipDryRunOnMissingResource=true
+      {{- end }}
+      {{- if $app.ignoreDifferences }}
+      # Otherwise selfHeal would still overwrite the ignored fields on every sync.
+      - RespectIgnoreDifferences=true
       {{- end }}
 {{- end }}
