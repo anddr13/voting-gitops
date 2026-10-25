@@ -2,8 +2,10 @@ image:
   registry: ghcr.io/anddr13
   # Bumped by the voting-app CI on every merge to main.
   tag: 09420fdf61ab8ae9c5ed06a19d4b673ec74b12d6
+
 cloudName: local
 voteOptions: cat,dog
+
 kafka:
   brokers: voting-kafka-bootstrap:9092
   topic: votes
@@ -12,11 +14,13 @@ redis:
   url: redis://redis:6379
 mongo:
   url: mongodb://mongo:27017/?directConnection=true
+
 ingress:
   enabled: true
   className: traefik
   # Empty = answer on any host, i.e. on the bare load balancer address.
   host: ""
+
 services:
   vote-api:
     http: true
@@ -24,15 +28,17 @@ services:
     env:
       RATE_LIMIT_SECONDS: "3"
     resources:
-      requests: {cpu: 50m, memory: 128Mi}
-      limits: {memory: 512Mi}
+      requests: { cpu: 50m, memory: 128Mi }
+      limits: { memory: 512Mi }
+
   result-api:
     http: true
     replicas: 2
     env: {}
     resources:
-      requests: {cpu: 50m, memory: 128Mi}
-      limits: {memory: 384Mi}
+      requests: { cpu: 50m, memory: 128Mi }
+      limits: { memory: 384Mi }
+
   worker:
     http: false
     replicas: 1
@@ -40,8 +46,8 @@ services:
       # Slows each message down so a k6 run builds lag and KEDA has something to scale on.
       PROCESSING_DELAY_MS: "20"
     resources:
-      requests: {cpu: 50m, memory: 128Mi}
-      limits: {memory: 512Mi}
+      requests: { cpu: 50m, memory: 128Mi }
+      limits: { memory: 512Mi }
     autoscaling:
       enabled: true
       minReplicas: 1
