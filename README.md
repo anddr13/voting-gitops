@@ -28,6 +28,17 @@ Terraform (voting-infra-*) ── helm_release ──▶ Argo CD + Application "
 Each wave starts only after the previous one is Healthy. That requires an Application health check in
 `argocd-cm`, which Terraform adds: out of the box Argo CD does not assess the health of child Applications.
 
+## What it looks like
+
+All six applications Synced and Healthy right after a fresh cluster came up (kind, Argo CD 3.5):
+
+![Argo CD: root, traefik, keda, strimzi, data and voting all Synced and Healthy](docs/images/argocd-applications.png)
+
+The `voting` application: Services, Deployments with their pods, the Ingress, and the KEDA `ScaledObject` with the
+HPA it manages for the worker.
+
+![Argo CD resource tree of the voting application](docs/images/argocd-voting-tree.png)
+
 ## Differences between clouds
 
 | | Azure (AKS) | AWS (EKS) | GCP (GKE) | kind (local) |
