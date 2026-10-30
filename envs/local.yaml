@@ -1,3 +1,8 @@
+# kind follows the lab branch: the ai-sre-agent chaos scenarios commit breakages and their reverts there,
+# so main and the clouds never see them.
+gitops:
+  targetRevision: lab
+
 applications:
   traefik:
     values:
@@ -19,3 +24,208 @@ applications:
   voting:
     values:
       cloudName: kind
+
+  # Monitoring for the ai-sre-agent stand, sized for a 12 GB Docker VM. Wave 0, so the ServiceMonitor
+  # and PrometheusRule CRDs exist before data and voting.
+  kube-prometheus-stack:
+    wave: 0
+    namespace: monitoring
+    # The CRDs are too large for client-side apply.
+    serverSideApply: true
+    chart:
+      repoURL: https://prometheus-community.github.io/helm-charts
+      name: kube-prometheus-stack
+      version: 92.16.1
+    # Without a password in values the Grafana chart generates a random one on every render, and
+    # Argo CD (no lookup) would see the Secret change on every sync. Nobody logs in, see grafana.ini.
+    ignoreDifferences:
+      - kind: Secret
+        name: kube-prometheus-stack-grafana
+        jsonPointers:
+          - /data
+    values:
+      fullnameOverride: kps
+      # kind runs etcd, the scheduler, the controller manager and kube-proxy bound to localhost:
+      # their targets would always be down and fire alerts that are not part of any scenario.
+      kubeEtcd: { enabled: false }
+      kubeControllerManager: { enabled: false }
+      kubeScheduler: { enabled: false }
+      kubeProxy: { enabled: false }
+      defaultRules:
+        rules:
+          etcd: false
+          kubeControllerManager: false
+          kubeSchedulerAlerting: false
+          kubeSchedulerRecording: false
+          kubeProxy: false
+          windows: false
+      prometheus:
+        prometheusSpec:
+          retention: 2d
+          retentionSize: 4GB
+          # Pick up ServiceMonitors, PodMonitors and PrometheusRules from every namespace,
+          # not only the ones labelled with this release.
+          serviceMonitorSelectorNilUsesHelmValues: false
+          podMonitorSelectorNilUsesHelmValues: false
+          ruleSelectorNilUsesHelmValues: false
+          probeSelectorNilUsesHelmValues: false
+          scrapeConfigSelectorNilUsesHelmValues: false
+          resources:
+            requests: { cpu: 200m, memory: 512Mi }
+            limits: { memory: 1536Mi }
+          storageSpec:
+            volumeClaimTemplate:
+              spec:
+                accessModes: [ReadWriteOnce]
+                resources:
+                  requests:
+                    storage: 5Gi
+      alertmanager:
+        alertmanagerSpec:
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 128Mi }
+      prometheusOperator:
+        resources:
+          requests: { cpu: 20m, memory: 64Mi }
+          limits: { memory: 192Mi }
+      kube-state-metrics:
+        resources:
+          requests: { cpu: 10m, memory: 48Mi }
+          limits: { memory: 128Mi }
+      prometheus-node-exporter:
+        # Docker Desktop's root mount is not shared, and node-exporter refuses to start with it.
+        hostRootFsMount:
+          enabled: false
+        resources:
+          requests: { cpu: 10m, memory: 24Mi }
+          limits: { memory: 64Mi }
+      grafana:
+        # Local only: anonymous admin, no login form, so no password has to live anywhere.
+        grafana.ini:
+          auth:
+            disable_login_form: true
+          auth.anonymous:
+            enabled: true
+            org_role: Admin
+        ingress:
+          enabled: true
+          ingressClassName: traefik
+          hosts: [grafana.localhost]
+        additionalDataSources:
+          - name: Loki
+            type: loki
+            uid: loki
+            access: proxy
+            url: http://loki.monitoring.svc:3100
+        resources:
+          requests: { cpu: 20m, memory: 128Mi }
+          limits: { memory: 384Mi }
+        sidecar:
+          resources:
+            requests: { cpu: 5m, memory: 48Mi }
+            limits: { memory: 128Mi }
+
+  loki:
+    wave: 0
+    namespace: monitoring
+    chart:
+      repoURL: https://grafana.github.io/helm-charts
+      name: loki
+      version: 7.5.0
+    values:
+      deploymentMode: SingleBinary
+      loki:
+        auth_enabled: false
+        commonConfig:
+          replication_factor: 1
+        storage:
+          type: filesystem
+        schemaConfig:
+          configs:
+            - from: "2024-04-01"
+              store: tsdb
+              object_store: filesystem
+              schema: v13
+              index:
+                prefix: loki_index_
+                period: 24h
+        limits_config:
+          retention_period: 48h
+        compactor:
+          retention_enabled: true
+          delete_request_store: filesystem
+      singleBinary:
+        replicas: 1
+        persistence:
+          size: 5Gi
+        resources:
+          requests: { cpu: 50m, memory: 192Mi }
+          limits: { memory: 512Mi }
+      # The chart defaults are a scalable install: object storage, memcached caches (over 1 GB),
+      # a gateway, a canary and a rules sidecar. None of it is needed on one node.
+      read: { replicas: 0 }
+      write: { replicas: 0 }
+      backend: { replicas: 0 }
+      gateway: { enabled: false }
+      chunksCache: { enabled: false }
+      resultsCache: { enabled: false }
+      minio: { enabled: false }
+      lokiCanary: { enabled: false }
+      test: { enabled: false }
+      sidecar:
+        rules:
+          enabled: false
+
+  alloy:
+    wave: 0
+    namespace: monitoring
+    chart:
+      repoURL: https://grafana.github.io/helm-charts
+      name: alloy
+      version: 1.15.0
+    values:
+      # Logs are tailed through the Kubernetes API, so one replica is enough and needs no host mounts.
+      controller:
+        type: deployment
+        replicas: 1
+      alloy:
+        resources:
+          requests: { cpu: 20m, memory: 96Mi }
+          limits: { memory: 256Mi }
+        configMap:
+          content: |
+            discovery.kubernetes "pods" {
+              role = "pod"
+            }
+
+            discovery.relabel "pods" {
+              targets = discovery.kubernetes.pods.targets
+              rule {
+                source_labels = ["__meta_kubernetes_namespace"]
+                target_label  = "namespace"
+              }
+              rule {
+                source_labels = ["__meta_kubernetes_pod_name"]
+                target_label  = "pod"
+              }
+              rule {
+                source_labels = ["__meta_kubernetes_pod_container_name"]
+                target_label  = "container"
+              }
+              rule {
+                source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+                target_label  = "app"
+              }
+            }
+
+            loki.source.kubernetes "pods" {
+              targets    = discovery.relabel.pods.output
+              forward_to = [loki.write.default.receiver]
+            }
+
+            loki.write "default" {
+              endpoint {
+                url = "http://loki.monitoring.svc:3100/loki/api/v1/push"
+              }
+            }
