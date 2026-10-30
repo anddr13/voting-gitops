@@ -36,13 +36,6 @@ applications:
       repoURL: https://prometheus-community.github.io/helm-charts
       name: kube-prometheus-stack
       version: 92.16.1
-    # Without a password in values the Grafana chart generates a random one on every render, and
-    # Argo CD (no lookup) would see the Secret change on every sync. Nobody logs in, see grafana.ini.
-    ignoreDifferences:
-      - kind: Secret
-        name: kube-prometheus-stack-grafana
-        jsonPointers:
-          - /data
     values:
       fullnameOverride: kps
       # kind runs etcd, the scheduler, the controller manager and kube-proxy bound to localhost:
@@ -101,7 +94,11 @@ applications:
           requests: { cpu: 10m, memory: 24Mi }
           limits: { memory: 64Mi }
       grafana:
-        # Local only: anonymous admin, no login form, so no password has to live anywhere.
+        # Local only: anonymous admin and no login form. No admin user either: otherwise the chart
+        # generates a random password on every render (Argo CD has no lookup), and the Secret and
+        # the pod's checksum annotation would be OutOfSync after every sync.
+        env:
+          GF_SECURITY_DISABLE_INITIAL_ADMIN_CREATION: "true"
         grafana.ini:
           auth:
             disable_login_form: true
