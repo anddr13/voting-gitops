@@ -40,8 +40,9 @@ spec:
               value: {{ $.Values.kafka.groupId | quote }}
             - name: REDIS_URL
               value: {{ $.Values.redis.url | quote }}
-            - name: MONGO_URL
-              value: {{ $.Values.mongo.url | quote }}
+            {{- with $svc.postgres }}
+            {{- include "voting.postgresEnv" (dict "role" . "root" $) | nindent 12 }}
+            {{- end }}
             - name: VOTE_OPTIONS
               value: {{ $.Values.voteOptions | quote }}
             - name: CLOUD_NAME
