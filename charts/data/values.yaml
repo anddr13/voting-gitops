@@ -30,7 +30,7 @@ postgres:
   # A primary and one streaming replica: enough for a failover and for replica lag.
   instances: 2
   # Pinned, so a new operator release does not upgrade the database on its own.
-  imageName: ""
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.6-system-trixie
   database: voting
   owner: voting
   storageSize: 5Gi
