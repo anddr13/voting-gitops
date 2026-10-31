@@ -120,11 +120,11 @@ spec:
           expr: |
             histogram_quantile(0.99,
               sum by (le) (rate(traefik_service_request_duration_seconds_bucket{exported_service=~"{{ $ns }}-vote-api-.*"}[1m]))
-            ) > 0.1
+            ) > 0.05
           labels:
             severity: warning
             stand: {{ .Values.standLabel }}
           annotations:
             summary: "vote-api p99 latency is {{`{{ $value | humanizeDuration }}`}}"
-            description: "The 99th percentile of vote-api response time over the last minute is above 100 ms."
+            description: "The 99th percentile of vote-api response time over the last minute is above 50 ms."
             runbook_url: {{ $runbook }}/VotingApiLatencyHigh.md
