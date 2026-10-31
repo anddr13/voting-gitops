@@ -59,11 +59,16 @@ spec:
             description: "Partitions of {{`{{ $labels.topic }}`}} have fewer in-sync replicas than their replication factor."
             runbook_url: {{ $runbook }}/KafkaUnderReplicatedPartitions.md
 
-        # 4. PostgreSQL failover: a replica was promoted, or there is no primary at all.
+        # 4. PostgreSQL failover: a replica was promoted, or there is no primary at all. "No primary" only
+        # counts while every exporter can query its instance: an exporter locked out (see rule 5) also makes
+        # the primary's series disappear, and that is not a failover.
         - alert: PostgresPrimaryFailover
           expr: |
             sum by (namespace) (changes(cnpg_pg_replication_in_recovery{namespace="{{ $ns }}"}[5m])) > 0
-              or absent(cnpg_pg_replication_in_recovery{namespace="{{ $ns }}"} == 0)
+              or (
+                absent(cnpg_pg_replication_in_recovery{namespace="{{ $ns }}"} == 0)
+                and on () absent(cnpg_collector_up{namespace="{{ $ns }}"} == 0)
+              )
           labels:
             severity: critical
             stand: {{ .Values.standLabel }}
@@ -72,24 +77,33 @@ spec:
             description: "An instance switched between primary and replica in the last 5 minutes, or no instance reports itself as primary. Writes fail until a primary is back."
             runbook_url: {{ $runbook }}/PostgresPrimaryFailover.md
 
-        # 5. Connection pool: the instance is running out of connections. superuser_reserved_connections and
-        # reserved_connections (kept for the metrics exporter) are not available to the application.
+        # 5. Connection pool: the instance is running out of connections. Reserved slots (superuser,
+        # reserved_connections) are not available to the application, so they are not capacity.
+        # Second branch: the exporter is up but cannot query its instance. It connects as an ordinary role
+        # (CloudNativePG does not let it use reserved slots), so when the clients take every connection it is
+        # locked out first, and the ratio above has no data exactly when it matters.
         - alert: PostgresConnectionsHigh
           expr: |
-            sum by (namespace, pod) (cnpg_backends_total{namespace="{{ $ns }}"})
-              / on (namespace, pod) (
-                max by (namespace, pod) (cnpg_pg_settings_setting{namespace="{{ $ns }}", name="max_connections"})
-                - on (namespace, pod)
-                sum by (namespace, pod) (cnpg_pg_settings_setting{namespace="{{ $ns }}", name=~"superuser_reserved_connections|reserved_connections"})
-              )
-              > 0.8
+            (
+              sum by (namespace, pod) (cnpg_backends_total{namespace="{{ $ns }}"})
+                / on (namespace, pod) (
+                  max by (namespace, pod) (cnpg_pg_settings_setting{namespace="{{ $ns }}", name="max_connections"})
+                  - on (namespace, pod)
+                  sum by (namespace, pod) (cnpg_pg_settings_setting{namespace="{{ $ns }}", name=~"superuser_reserved_connections|reserved_connections"})
+                )
+                > 0.8
+            )
+            or on (namespace, pod) (
+              max by (namespace, pod) (cnpg_collector_up{namespace="{{ $ns }}"}) == 0
+              and on (namespace, pod) max by (namespace, pod) (up{namespace="{{ $ns }}", container="postgres"}) == 1
+            )
           for: 1m
           labels:
             severity: warning
             stand: {{ .Values.standLabel }}
           annotations:
-            summary: "{{`{{ $labels.pod }}`}} uses {{`{{ $value | humanizePercentage }}`}} of its client connections"
-            description: "More than 80% of the connections available to clients (max_connections minus the reserved slots) on {{`{{ $labels.pod }}`}} are in use; new clients will get 'too many clients'."
+            summary: "{{`{{ $labels.pod }}`}} is running out of client connections"
+            description: "On {{`{{ $labels.pod }}`}} more than 80% of the connections available to clients (max_connections minus the reserved slots) are in use, or the metrics exporter cannot connect at all; new clients get 'too many clients' / 'remaining connection slots are reserved'."
             runbook_url: {{ $runbook }}/PostgresConnectionsHigh.md
 
         # 6. Replica lag: the replicas (result-api reads from them) serve stale data.

@@ -15,15 +15,6 @@ spec:
     initdb:
       database: {{ .Values.postgres.database }}
       owner: {{ .Values.postgres.owner }}
-  # The metrics exporter connects as an ordinary role. When the application uses up max_connections,
-  # it would be locked out too, and the instance would vanish from monitoring exactly when it matters.
-  # reserved_connections (in parameters) keeps slots for members of pg_use_reserved_connections.
-  managed:
-    roles:
-      - name: cnpg_metrics_exporter
-        ensure: present
-        login: true
-        inRoles: [pg_monitor, pg_use_reserved_connections]
   postgresql:
     parameters:
       {{- range $key, $value := .Values.postgres.parameters }}

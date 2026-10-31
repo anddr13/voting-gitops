@@ -49,5 +49,3 @@ postgres:
   parameters:
     shared_buffers: 128MB
     max_connections: "100"
-    # Kept for the metrics exporter, see templates/postgres.yaml.
-    reserved_connections: "2"
