@@ -10,8 +10,10 @@ the cluster in the state described here. The application code lives in
 apps/                 app of apps: one Argo CD Application per component
   values.yaml         chart versions and base values
 envs/<cloud>.yaml     per-cloud differences (load balancer annotations, StorageClass, cloud name shown in the UI)
-charts/data/          Kafka (Strimzi CRs), Redis, MongoDB
-charts/voting/        vote-api, worker, result-api, Ingress, KEDA ScaledObject
+envs/local.yaml       kind: also monitoring (kube-prometheus-stack, Loki, Alloy), 3 Kafka nodes, the alerts
+charts/data/          Kafka (Strimzi CRs), Redis, PostgreSQL (CloudNativePG Cluster)
+charts/voting/        vote-api, worker, result-api, Ingress, KEDA ScaledObject, migrations Job
+charts/alerts/        PrometheusRules for the ai-sre-agent scenarios, each linking its runbook
 ```
 
 How it fits together:
