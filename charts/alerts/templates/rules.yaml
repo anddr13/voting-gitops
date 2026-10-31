@@ -11,9 +11,11 @@ spec:
     - name: voting
       rules:
         # 1. Bad deploy: an image tag that does not exist, a crashing container, a missing Secret.
+        # Not grouped by reason: the kubelet alternates ErrImagePull and ImagePullBackOff, and a label that
+        # changes would restart the `for` timer every time.
         - alert: VotingPodNotStarting
           expr: |
-            max by (namespace, pod, container, reason) (
+            max by (namespace, pod, container) (
               kube_pod_container_status_waiting_reason{namespace="{{ $ns }}",
                 reason=~"ImagePullBackOff|ErrImagePull|InvalidImageName|CrashLoopBackOff|CreateContainerConfigError"}
             ) > 0
@@ -22,8 +24,8 @@ spec:
             severity: critical
             stand: {{ .Values.standLabel }}
           annotations:
-            summary: "{{`{{ $labels.pod }}`}}/{{`{{ $labels.container }}`}} cannot start: {{`{{ $labels.reason }}`}}"
-            description: "Container {{`{{ $labels.container }}`}} of pod {{`{{ $labels.pod }}`}} has been waiting in {{`{{ $labels.reason }}`}} for more than 2 minutes."
+            summary: "{{`{{ $labels.pod }}`}}/{{`{{ $labels.container }}`}} cannot start"
+            description: "Container {{`{{ $labels.container }}`}} of pod {{`{{ $labels.pod }}`}} has been waiting for more than 2 minutes (image pull, crash loop or missing config); kube_pod_container_status_waiting_reason has the reason."
             runbook_url: {{ $runbook }}/VotingPodNotStarting.md
 
         # 2. Regression after a deploy: the HTTP services answer with 5xx (seen by Traefik). Traefik's own
