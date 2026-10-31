@@ -72,19 +72,24 @@ spec:
             description: "An instance switched between primary and replica in the last 5 minutes, or no instance reports itself as primary. Writes fail until a primary is back."
             runbook_url: {{ $runbook }}/PostgresPrimaryFailover.md
 
-        # 5. Connection pool: the instance is running out of connections.
+        # 5. Connection pool: the instance is running out of connections. superuser_reserved_connections are
+        # not available to the application, so they are not counted as capacity.
         - alert: PostgresConnectionsHigh
           expr: |
             sum by (namespace, pod) (cnpg_backends_total{namespace="{{ $ns }}"})
-              / on (namespace, pod) max by (namespace, pod) (cnpg_pg_settings_setting{namespace="{{ $ns }}", name="max_connections"})
+              / on (namespace, pod) (
+                max by (namespace, pod) (cnpg_pg_settings_setting{namespace="{{ $ns }}", name="max_connections"})
+                - on (namespace, pod)
+                max by (namespace, pod) (cnpg_pg_settings_setting{namespace="{{ $ns }}", name="superuser_reserved_connections"})
+              )
               > 0.8
           for: 1m
           labels:
             severity: warning
             stand: {{ .Values.standLabel }}
           annotations:
-            summary: "{{`{{ $labels.pod }}`}} uses {{`{{ $value | humanizePercentage }}`}} of max_connections"
-            description: "More than 80% of max_connections on {{`{{ $labels.pod }}`}} are in use; new clients will get 'too many connections'."
+            summary: "{{`{{ $labels.pod }}`}} uses {{`{{ $value | humanizePercentage }}`}} of its client connections"
+            description: "More than 80% of the connections available to clients (max_connections minus superuser_reserved_connections) on {{`{{ $labels.pod }}`}} are in use; new clients will get 'too many clients'."
             runbook_url: {{ $runbook }}/PostgresConnectionsHigh.md
 
         # 6. Replica lag: the replicas (result-api reads from them) serve stale data.
