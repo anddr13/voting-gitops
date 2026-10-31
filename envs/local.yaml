@@ -21,6 +21,25 @@ applications:
             enabled: false
           ingressEndpoint:
             ip: 127.0.0.1
+      # Request rates and status codes per Service: the source of the 5xx alert.
+      metrics:
+        prometheus:
+          service:
+            enabled: true
+          serviceMonitor:
+            enabled: true
+          # Render the ServiceMonitor even before kube-prometheus-stack (same wave) has added the CRD;
+          # the sync retries until it exists.
+          disableAPICheck: true
+    skipDryRunOnMissingResource: true
+  data:
+    values:
+      monitoring:
+        enabled: true
+      kafka:
+        nodes: 3
+        replicationFactor: 3
+        minInsyncReplicas: 2
   voting:
     values:
       cloudName: kind

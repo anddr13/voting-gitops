@@ -1,10 +1,19 @@
 # Empty = the cluster's default StorageClass. Set per cloud in envs/<cloud>.yaml.
 storageClass: ""
 
+# Kafka exporter and PodMonitors for Kafka and PostgreSQL; needs the Prometheus Operator CRDs.
+monitoring:
+  enabled: false
+
 kafka:
   name: voting
   version: 4.3.1
   metadataVersion: 4.3-IV0
+  # One node: no replication, the cheapest sandbox. envs/local.yaml runs three, so a broker can be
+  # lost without losing data (and under-replicated partitions can be shown).
+  nodes: 1
+  replicationFactor: 1
+  minInsyncReplicas: 1
   storageSize: 10Gi
   resources:
     requests: { cpu: 250m, memory: 1Gi }

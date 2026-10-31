@@ -1,4 +1,4 @@
-# Single-node KRaft cluster: one pool that is both controller and broker.
+# KRaft cluster of kafka.nodes nodes, each both controller and broker.
 apiVersion: kafka.strimzi.io/v1
 kind: KafkaNodePool
 metadata:
@@ -6,7 +6,7 @@ metadata:
   labels:
     strimzi.io/cluster: {{ .Values.kafka.name }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.kafka.nodes }}
   roles:
     - controller
     - broker
@@ -41,11 +41,11 @@ spec:
         type: internal
         tls: false
     config:
-      offsets.topic.replication.factor: 1
-      transaction.state.log.replication.factor: 1
-      transaction.state.log.min.isr: 1
-      default.replication.factor: 1
-      min.insync.replicas: 1
+      offsets.topic.replication.factor: {{ .Values.kafka.replicationFactor }}
+      transaction.state.log.replication.factor: {{ .Values.kafka.replicationFactor }}
+      transaction.state.log.min.isr: {{ .Values.kafka.minInsyncReplicas }}
+      default.replication.factor: {{ .Values.kafka.replicationFactor }}
+      min.insync.replicas: {{ .Values.kafka.minInsyncReplicas }}
       # Topics are declared as KafkaTopic resources below, nothing appears by accident.
       auto.create.topics.enable: false
   entityOperator:
@@ -53,6 +53,13 @@ spec:
       resources:
         requests: { cpu: 50m, memory: 256Mi }
         limits: { memory: 384Mi }
+  {{- if .Values.monitoring.enabled }}
+  # Topic, partition (incl. under-replicated) and consumer group lag metrics.
+  kafkaExporter:
+    resources:
+      requests: { cpu: 20m, memory: 64Mi }
+      limits: { memory: 128Mi }
+  {{- end }}
 {{- range $name, $topic := .Values.topics }}
 ---
 apiVersion: kafka.strimzi.io/v1
@@ -63,7 +70,7 @@ metadata:
     strimzi.io/cluster: {{ $.Values.kafka.name }}
 spec:
   partitions: {{ $topic.partitions }}
-  replicas: 1
+  replicas: {{ $.Values.kafka.replicationFactor }}
   config:
     retention.ms: {{ $topic.retentionMs }}
 {{- end }}
