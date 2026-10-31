@@ -24,6 +24,8 @@ applications:
   voting:
     values:
       cloudName: kind
+      metrics:
+        podMonitor: true
 
   # Monitoring for the ai-sre-agent stand, sized for a 12 GB Docker VM. Wave 0, so the ServiceMonitor
   # and PrometheusRule CRDs exist before data and voting.

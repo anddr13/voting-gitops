@@ -1,7 +1,7 @@
 image:
   registry: ghcr.io/anddr13
   # Bumped by the voting-app CI on every merge to main.
-  tag: 68ee20280936c006a7f261635e8e35039c8c49ad
+  tag: b18d55f29778b6db6634662c94e4e8e6b4c36825
 
 cloudName: local
 voteOptions: cat,dog
@@ -19,6 +19,11 @@ postgres:
   database: voting
   # Created by CloudNativePG: username and password of the database owner.
   secret: voting-pg-app
+
+# A PodMonitor for the services with /metrics; only where the Prometheus Operator runs.
+metrics:
+  podMonitor: false
+  services: [worker]
 
 ingress:
   enabled: true
