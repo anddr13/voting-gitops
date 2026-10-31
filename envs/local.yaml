@@ -24,6 +24,8 @@ applications:
       # Request rates and status codes per Service: the source of the 5xx alert.
       metrics:
         prometheus:
+          # The default buckets start at 0.1 s: every quantile of a fast service then reads ~0.099 s.
+          buckets: "0.005,0.01,0.025,0.05,0.1,0.25,0.5,1,2.5,5"
           service:
             enabled: true
           serviceMonitor:
