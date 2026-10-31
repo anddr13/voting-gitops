@@ -22,9 +22,9 @@ How it fits together:
 Terraform (voting-infra-*) ── helm_release ──▶ Argo CD + Application "root"
                                                   │  path: apps, values: envs/<cloud>.yaml
                                                   ▼
-  wave 0: traefik (Ingress + LoadBalancer) · keda · strimzi-kafka-operator
-  wave 1: data    → Kafka 4.3 (KRaft, 1 node) + topics votes/votes-dlq · Redis · MongoDB (1-member replica set)
-  wave 2: voting  → vote-api ×2 · result-api ×2 · worker (1–6 replicas, KEDA on consumer lag)
+  wave 0: traefik (Ingress + LoadBalancer) · keda · strimzi-kafka-operator · cloudnative-pg
+  wave 1: data    → Kafka 4.3 (KRaft, 1 node) + topics votes/votes-dlq · Redis · PostgreSQL 18 (primary + replica)
+  wave 2: voting  → migrate (PreSync Job) · vote-api ×2 · result-api ×2 · worker (1–6 replicas, KEDA on consumer lag)
 ```
 
 Each wave starts only after the previous one is Healthy. That requires an Application health check in
@@ -51,26 +51,35 @@ HPA it manages for the worker.
 Everything else is identical. That is the point of the GitOps layer: the same charts run on all three clouds,
 and on a laptop through [voting-infra-local](https://github.com/anddr13/voting-infra-local) for free.
 
+## The lab branch (kind)
+
+kind follows the `lab` branch instead of `main` (`envs/local.yaml`, and the root Application in
+voting-infra-local). The [ai-sre-agent](https://github.com/anddr13/ai-sre-agent) chaos scenarios commit
+breakages there and undo them with `git revert`, so its history shows real deploys and rollbacks while `main`
+and the clouds never see them. Only kind gets the monitoring stack and `charts/alerts`.
+
 ## Releases
 
-After building the images, the `voting-app` CI commits a new `image.tag` to `charts/voting/values.yaml`.
-Argo CD picks the commit up (it polls every ~3 minutes) and rolls the version out to every running cluster.
+After building the images, the `voting-app` CI commits a new `image.tag` to `charts/voting/values.yaml`,
+on `main` and on `lab`. Argo CD picks the commit up (it polls every ~3 minutes) and rolls the version out to
+every running cluster.
 Rolling back is a `git revert` of that commit.
 
 ## Worth knowing
 
 - **Server-side apply** is enabled for traefik/keda/strimzi: the Strimzi and KEDA CRDs exceed the size limit of the `last-applied-configuration` annotation.
 - **SkipDryRunOnMissingResource** is needed by `data` and `voting`: their custom resources (Kafka, ScaledObject) cannot be validated until the operators have installed the CRDs.
-- **Disks do not outlive their workloads.** Kafka uses `deleteClaim: true`, Mongo uses `persistentVolumeClaimRetentionPolicy: Delete`.
+- **Disks do not outlive their workloads.** Kafka uses `deleteClaim: true`; CloudNativePG deletes the PVCs of a deleted Cluster.
   Otherwise orphaned cloud disks would be left behind after `terraform destroy`.
 - **The `resources-finalizer.argocd.argoproj.io` finalizer** is set on every Application, so deleting `root` cascades to everything,
   including LoadBalancer Services. The pre-destroy script in the infra repositories relies on this.
-- **No Bitnami charts, on purpose:** their free images are frozen. Redis and Mongo are plain manifests.
+- **No Bitnami charts, on purpose:** their free images are frozen. Redis is a plain manifest, PostgreSQL comes from the CloudNativePG operator.
+- **Credentials never touch Git.** CloudNativePG creates the `voting-pg-app` Secret; the services read `PGUSER`/`PGPASSWORD` from it.
 
 ## Check locally
 
 ```bash
-helm lint apps charts/data charts/voting
+helm lint apps charts/data charts/voting charts/alerts
 helm template root apps -f apps/values.yaml -f envs/aws.yaml
 ```
 
