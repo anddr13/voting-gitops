@@ -1,0 +1,130 @@
+{{- $ns := .Values.namespace }}
+{{- $runbook := .Values.runbookBaseUrl }}
+# One alert per ai-sre-agent scenario (1-8 in its PLAN.md). Every alert has the stand label, which
+# Alertmanager routes to the agent, and a runbook_url pointing at runbooks/<alertname>.md.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: voting
+spec:
+  groups:
+    - name: voting
+      rules:
+        # 1. Bad deploy: an image tag that does not exist, a crashing container, a missing Secret.
+        - alert: VotingPodNotStarting
+          expr: |
+            max by (namespace, pod, container, reason) (
+              kube_pod_container_status_waiting_reason{namespace="{{ $ns }}",
+                reason=~"ImagePullBackOff|ErrImagePull|InvalidImageName|CrashLoopBackOff|CreateContainerConfigError"}
+            ) > 0
+          for: 2m
+          labels:
+            severity: critical
+            stand: {{ .Values.standLabel }}
+          annotations:
+            summary: "{{`{{ $labels.pod }}`}}/{{`{{ $labels.container }}`}} cannot start: {{`{{ $labels.reason }}`}}"
+            description: "Container {{`{{ $labels.container }}`}} of pod {{`{{ $labels.pod }}`}} has been waiting in {{`{{ $labels.reason }}`}} for more than 2 minutes."
+            runbook_url: {{ $runbook }}/VotingPodNotStarting.md
+
+        # 2. Regression after a deploy: the HTTP services answer with 5xx (seen by Traefik). Traefik's own
+        # "service" label arrives as exported_service: "service" is taken by the scrape target.
+        - alert: VotingHttp5xxRate
+          expr: |
+            sum by (exported_service) (rate(traefik_service_requests_total{exported_service=~"{{ $ns }}-.*", code=~"5.."}[2m]))
+              / sum by (exported_service) (rate(traefik_service_requests_total{exported_service=~"{{ $ns }}-.*"}[2m]))
+              > 0.05
+          for: 2m
+          labels:
+            severity: critical
+            stand: {{ .Values.standLabel }}
+          annotations:
+            summary: "{{`{{ $labels.exported_service }}`}}: {{`{{ $value | humanizePercentage }}`}} of requests fail with 5xx"
+            description: "More than 5% of the requests Traefik sends to {{`{{ $labels.exported_service }}`}} have returned 5xx for 2 minutes."
+            runbook_url: {{ $runbook }}/VotingHttp5xxRate.md
+
+        # 3. A Kafka broker is down: its partition replicas fall out of sync.
+        - alert: KafkaUnderReplicatedPartitions
+          expr: |
+            sum by (namespace, topic) (
+              kafka_topic_partition_under_replicated_partition{namespace="{{ $ns }}"}
+            ) > 0
+          for: 1m
+          labels:
+            severity: warning
+            stand: {{ .Values.standLabel }}
+          annotations:
+            summary: "Topic {{`{{ $labels.topic }}`}} has {{`{{ $value }}`}} under-replicated partitions"
+            description: "Partitions of {{`{{ $labels.topic }}`}} have fewer in-sync replicas than their replication factor."
+            runbook_url: {{ $runbook }}/KafkaUnderReplicatedPartitions.md
+
+        # 4. PostgreSQL failover: a replica was promoted, or there is no primary at all.
+        - alert: PostgresPrimaryFailover
+          expr: |
+            sum by (namespace) (changes(cnpg_pg_replication_in_recovery{namespace="{{ $ns }}"}[5m])) > 0
+              or absent(cnpg_pg_replication_in_recovery{namespace="{{ $ns }}"} == 0)
+          labels:
+            severity: critical
+            stand: {{ .Values.standLabel }}
+          annotations:
+            summary: "PostgreSQL in {{`{{ $labels.namespace }}`}}: the primary changed or is unavailable"
+            description: "An instance switched between primary and replica in the last 5 minutes, or no instance reports itself as primary. Writes fail until a primary is back."
+            runbook_url: {{ $runbook }}/PostgresPrimaryFailover.md
+
+        # 5. Connection pool: the instance is running out of connections.
+        - alert: PostgresConnectionsHigh
+          expr: |
+            sum by (namespace, pod) (cnpg_backends_total{namespace="{{ $ns }}"})
+              / on (namespace, pod) max by (namespace, pod) (cnpg_pg_settings_setting{namespace="{{ $ns }}", name="max_connections"})
+              > 0.8
+          for: 1m
+          labels:
+            severity: warning
+            stand: {{ .Values.standLabel }}
+          annotations:
+            summary: "{{`{{ $labels.pod }}`}} uses {{`{{ $value | humanizePercentage }}`}} of max_connections"
+            description: "More than 80% of max_connections on {{`{{ $labels.pod }}`}} are in use; new clients will get 'too many connections'."
+            runbook_url: {{ $runbook }}/PostgresConnectionsHigh.md
+
+        # 6. Replica lag: the replicas (result-api reads from them) serve stale data.
+        - alert: PostgresReplicationLag
+          expr: |
+            max by (namespace, pod) (cnpg_pg_replication_lag{namespace="{{ $ns }}"}) > 30
+          for: 1m
+          labels:
+            severity: warning
+            stand: {{ .Values.standLabel }}
+          annotations:
+            summary: "Replica {{`{{ $labels.pod }}`}} is {{`{{ $value | humanizeDuration }}`}} behind the primary"
+            description: "Replay on {{`{{ $labels.pod }}`}} has been more than 30 seconds behind for a minute; reads through the -ro service are stale."
+            runbook_url: {{ $runbook }}/PostgresReplicationLag.md
+
+        # 7. A container was killed for exceeding its memory limit.
+        - alert: ContainerOOMKilled
+          expr: |
+            max by (namespace, pod, container) (
+              kube_pod_container_status_last_terminated_reason{namespace="{{ $ns }}", reason="OOMKilled"}
+            ) == 1
+            and on (namespace, pod, container)
+            increase(kube_pod_container_status_restarts_total{namespace="{{ $ns }}"}[10m]) > 0
+          labels:
+            severity: warning
+            stand: {{ .Values.standLabel }}
+          annotations:
+            summary: "{{`{{ $labels.pod }}`}}/{{`{{ $labels.container }}`}} was OOMKilled"
+            description: "Container {{`{{ $labels.container }}`}} of {{`{{ $labels.pod }}`}} restarted in the last 10 minutes after being killed for exceeding its memory limit."
+            runbook_url: {{ $runbook }}/ContainerOOMKilled.md
+
+        # 8. Latency of vote-api. Deliberately sensitive (p99 over 1 minute, no `for`): it fires on short
+        # bursts and resolves by itself. The agent has to tell such noise from a real incident.
+        - alert: VotingApiLatencyHigh
+          expr: |
+            histogram_quantile(0.99,
+              sum by (le) (rate(traefik_service_request_duration_seconds_bucket{exported_service=~"{{ $ns }}-vote-api-.*"}[1m]))
+            ) > 0.1
+          labels:
+            severity: warning
+            stand: {{ .Values.standLabel }}
+          annotations:
+            summary: "vote-api p99 latency is {{`{{ $value | humanizeDuration }}`}}"
+            description: "The 99th percentile of vote-api response time over the last minute is above 100 ms."
+            runbook_url: {{ $runbook }}/VotingApiLatencyHigh.md
