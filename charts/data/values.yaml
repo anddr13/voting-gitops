@@ -1,10 +1,19 @@
 # Empty = the cluster's default StorageClass. Set per cloud in envs/<cloud>.yaml.
 storageClass: ""
 
+# Kafka exporter and PodMonitors for Kafka and PostgreSQL; needs the Prometheus Operator CRDs.
+monitoring:
+  enabled: false
+
 kafka:
   name: voting
   version: 4.3.1
   metadataVersion: 4.3-IV0
+  # One node: no replication, the cheapest sandbox. envs/local.yaml runs three, so a broker can be
+  # lost without losing data (and under-replicated partitions can be shown).
+  nodes: 1
+  replicationFactor: 1
+  minInsyncReplicas: 1
   storageSize: 10Gi
   resources:
     requests: { cpu: 250m, memory: 1Gi }
@@ -25,9 +34,18 @@ redis:
     requests: { cpu: 25m, memory: 64Mi }
     limits: { memory: 128Mi }
 
-mongo:
-  image: mongo:8.0
-  storageSize: 10Gi
+postgres:
+  name: voting-pg
+  # A primary and one streaming replica: enough for a failover and for replica lag.
+  instances: 2
+  # Pinned, so a new operator release does not upgrade the database on its own.
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.6-system-trixie
+  database: voting
+  owner: voting
+  storageSize: 5Gi
   resources:
-    requests: { cpu: 100m, memory: 512Mi }
-    limits: { memory: 768Mi }
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+  parameters:
+    shared_buffers: 128MB
+    max_connections: "100"

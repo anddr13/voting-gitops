@@ -1,0 +1,29 @@
+# PostgreSQL managed by CloudNativePG. It creates the Services the app uses:
+#   <name>-rw  the primary (writes: the worker, migrations)
+#   <name>-ro  the replicas only (reads: result-api)
+# and the Secret <name>-app with the owner's credentials.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Values.postgres.name }}
+spec:
+  instances: {{ .Values.postgres.instances }}
+  {{- with .Values.postgres.imageName }}
+  imageName: {{ . }}
+  {{- end }}
+  bootstrap:
+    initdb:
+      database: {{ .Values.postgres.database }}
+      owner: {{ .Values.postgres.owner }}
+  postgresql:
+    parameters:
+      {{- range $key, $value := .Values.postgres.parameters }}
+      {{ $key }}: {{ $value | quote }}
+      {{- end }}
+  storage:
+    size: {{ .Values.postgres.storageSize }}
+    {{- with .Values.storageClass }}
+    storageClass: {{ . }}
+    {{- end }}
+  resources:
+    {{- toYaml .Values.postgres.resources | nindent 4 }}

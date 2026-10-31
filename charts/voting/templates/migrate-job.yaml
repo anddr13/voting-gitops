@@ -1,0 +1,41 @@
+# Schema migrations (services/worker/migrations in voting-app), applied before every sync of the app,
+# so new code never starts against an old schema. The worker image carries them; already applied
+# migrations are skipped. The last run is kept until the next sync for its logs.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+  labels:
+    {{- include "voting.labels" (dict "name" "migrate" "root" $) | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  # migrate.js already waits up to a minute for the database; this covers a cluster still bootstrapping.
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        {{- include "voting.labels" (dict "name" "migrate" "root" $) | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: "{{ .Values.image.registry }}/voting-worker:{{ .Values.image.tag }}"
+          command: ["node", "src/migrate.js"]
+          env:
+            {{- include "voting.postgresEnv" (dict "role" "rw" "root" $) | nindent 12 }}
+          resources:
+            requests: { cpu: 10m, memory: 64Mi }
+            limits: { memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

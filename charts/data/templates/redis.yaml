@@ -1,5 +1,5 @@
 # Redis only holds derived data (counters, rate-limit keys), so no persistence:
-# after a restart result-api rebuilds the counters from MongoDB.
+# after a restart result-api rebuilds the counters from PostgreSQL.
 apiVersion: v1
 kind: Service
 metadata:

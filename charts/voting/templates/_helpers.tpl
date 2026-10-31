@@ -25,3 +25,24 @@ The app pods resolve short names in their own namespace; the KEDA operator runs 
 {{- end -}}
 {{- join "," $brokers -}}
 {{- end }}
+
+{{/*
+libpq variables (read by the pg driver) for a service with `postgres: rw|ro`.
+*/}}
+{{- define "voting.postgresEnv" -}}
+{{- $pg := .root.Values.postgres -}}
+- name: PGHOST
+  value: {{ eq .role "ro" | ternary $pg.roHost $pg.rwHost | quote }}
+- name: PGDATABASE
+  value: {{ $pg.database | quote }}
+- name: PGUSER
+  valueFrom:
+    secretKeyRef:
+      name: {{ $pg.secret }}
+      key: username
+- name: PGPASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ $pg.secret }}
+      key: password
+{{- end }}

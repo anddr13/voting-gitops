@@ -1,0 +1,6 @@
+# The namespace the voting app (and its Kafka and PostgreSQL) runs in.
+namespace: voting
+# Runbooks live in the ai-sre-agent repo; the alert name is the file name.
+runbookBaseUrl: https://github.com/anddr13/ai-sre-agent/blob/main/runbooks
+# Every rule here carries this label; Alertmanager routes on it to the agent.
+standLabel: voting

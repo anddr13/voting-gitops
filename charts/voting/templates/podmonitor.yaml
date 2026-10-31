@@ -1,0 +1,18 @@
+{{- if .Values.metrics.podMonitor }}
+# Scrapes /metrics of the services that expose it (the worker). Needs the Prometheus Operator CRDs,
+# so it is enabled per environment (envs/local.yaml).
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: voting
+spec:
+  selector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: {{ toJson .Values.metrics.services }}
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+{{- end }}

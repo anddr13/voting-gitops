@@ -2,7 +2,7 @@ gitops:
   repoURL: https://github.com/anddr13/voting-gitops.git
   targetRevision: main
 
-# Sync waves: operators (0) -> Kafka/Redis/Mongo (1) -> the app (2).
+# Sync waves: operators (0) -> Kafka/Redis/PostgreSQL (1) -> the app (2).
 # A wave starts only after the previous one is Healthy (see the Application health check
 # that Terraform adds to argocd-cm).
 applications:
@@ -56,6 +56,19 @@ applications:
       watchAnyNamespace: true
       # Single-replica Kafka on spot nodes: a PDB would only block node upgrades.
       generatePodDisruptionBudget: false
+
+  cloudnative-pg:
+    wave: 0
+    namespace: cnpg-system
+    serverSideApply: true
+    chart:
+      repoURL: https://cloudnative-pg.github.io/charts
+      name: cloudnative-pg
+      version: 0.29.1
+    values:
+      resources:
+        requests: { cpu: 20m, memory: 64Mi }
+        limits: { memory: 256Mi }
 
   data:
     wave: 1
