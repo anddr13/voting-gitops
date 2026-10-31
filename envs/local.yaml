@@ -95,6 +95,24 @@ applications:
                   requests:
                     storage: 5Gi
       alertmanager:
+        # The voting alerts (charts/alerts, label stand=voting) go to the ai-sre-agent webhook;
+        # everything else from the default rules stays in Alertmanager's UI only.
+        config:
+          route:
+            receiver: "null"
+            group_by: [alertname, namespace]
+            group_wait: 30s
+            group_interval: 5m
+            repeat_interval: 4h
+            routes:
+              - receiver: ai-sre-agent
+                matchers: ['stand="voting"']
+          receivers:
+            - name: "null"
+            - name: ai-sre-agent
+              webhook_configs:
+                - url: http://ai-sre-agent.ai-sre-agent.svc:8080/alertmanager
+                  send_resolved: true
         alertmanagerSpec:
           resources:
             requests: { cpu: 10m, memory: 32Mi }
@@ -247,3 +265,9 @@ applications:
                 url = "http://loki.monitoring.svc:3100/loki/api/v1/push"
               }
             }
+
+  # One alert per ai-sre-agent scenario. Wave 1: the PrometheusRule CRD comes with kube-prometheus-stack.
+  alerts:
+    wave: 1
+    namespace: monitoring
+    path: charts/alerts
