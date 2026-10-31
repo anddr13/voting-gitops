@@ -48,4 +48,4 @@ postgres:
     limits: { memory: 512Mi }
   parameters:
     shared_buffers: 128MB
-    max_connections: "100"
+    max_connections: "12"
