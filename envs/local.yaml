@@ -273,3 +273,12 @@ applications:
     wave: 1
     namespace: monitoring
     path: charts/alerts
+
+  # The agent's read-only ServiceAccount and ClusterRole, from the ai-sre-agent repository.
+  ai-sre-agent:
+    wave: 0
+    namespace: ai-sre-agent
+    git:
+      repoURL: https://github.com/anddr13/ai-sre-agent.git
+      targetRevision: main
+      path: deploy

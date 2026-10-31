@@ -18,17 +18,24 @@ spec:
     repoURL: {{ $app.chart.repoURL }}
     chart: {{ $app.chart.name }}
     targetRevision: {{ $app.chart.version | quote }}
+    {{- else if $app.git }}
+    # Plain manifests from another repository (e.g. the agent's RBAC from ai-sre-agent).
+    repoURL: {{ $app.git.repoURL }}
+    targetRevision: {{ $app.git.targetRevision }}
+    path: {{ $app.git.path }}
     {{- else }}
     repoURL: {{ $.Values.gitops.repoURL }}
     targetRevision: {{ $.Values.gitops.targetRevision }}
     path: {{ $app.path }}
     {{- end }}
+    {{- if not $app.git }}
     helm:
       releaseName: {{ $name }}
       {{- with $app.values }}
       valuesObject:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+    {{- end }}
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ $app.namespace }}
