@@ -274,7 +274,8 @@ applications:
     namespace: monitoring
     path: charts/alerts
 
-  # The agent's read-only ServiceAccount and ClusterRole, from the ai-sre-agent repository.
+  # The agent from the ai-sre-agent repository: its read-only ServiceAccount, the webhook service and its own
+  # Postgres (ai-sre-db: pgvector for RAG and the MLflow backend).
   ai-sre-agent:
     wave: 0
     namespace: ai-sre-agent
@@ -282,3 +283,66 @@ applications:
       repoURL: https://github.com/anddr13/ai-sre-agent.git
       targetRevision: main
       path: deploy
+
+  # MLflow for ai-sre-agent: backtest runs, traces of the investigations. Its backend is the agent's own
+  # Postgres (ai-sre-db from the ai-sre-agent app, database mlflow), so wave 1, after that app.
+  mlflow:
+    wave: 1
+    namespace: ai-sre-agent
+    chart:
+      repoURL: https://community-charts.github.io/helm-charts
+      name: mlflow
+      version: 1.11.7
+    values:
+      backendStore:
+        databaseMigration: true
+        databaseConnectionCheck: true
+        postgres:
+          enabled: true
+          host: ai-sre-db-rw.ai-sre-agent.svc
+          port: 5432
+          database: mlflow
+          driver: psycopg2
+        # Written by CloudNativePG: the owner of the cluster's databases.
+        existingDatabaseSecret:
+          name: ai-sre-db-app
+          usernameKey: username
+          passwordKey: password
+      # The server keeps the artifacts (summary.md, results.jsonl) on its own volume and serves them.
+      artifactRoot:
+        proxiedArtifactStorage: true
+        defaultArtifactsDestination: /mlartifacts
+      extraVolumes:
+        - name: artifacts
+          persistentVolumeClaim:
+            claimName: mlflow-artifacts
+      extraVolumeMounts:
+        - name: artifacts
+          mountPath: /mlartifacts
+      extraDeploy:
+        - apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: mlflow-artifacts
+          spec:
+            accessModes: [ReadWriteOnce]
+            resources:
+              requests:
+                storage: 1Gi
+      ingress:
+        enabled: true
+        className: traefik
+        hosts:
+          - host: mlflow.localhost
+            paths:
+              - path: /
+                pathType: Prefix
+      corsAllowedOrigins: ["http://mlflow.localhost:8090"]
+      # The agent in the cluster calls it by its Service name; the backtest by the ingress host and port.
+      serverAllowedHosts:
+        - mlflow.localhost:8090
+        - mlflow.ai-sre-agent.svc
+        - mlflow.ai-sre-agent.svc:80
+      resources:
+        requests: { cpu: 50m, memory: 384Mi }
+        limits: { memory: 768Mi }
