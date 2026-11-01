@@ -44,7 +44,7 @@ applications:
         minInsyncReplicas: 2
   voting:
     values:
-      cloudName: kind
+      cloudName: kind-lab
       metrics:
         podMonitor: true
 
