@@ -337,7 +337,9 @@ applications:
             paths:
               - path: /
                 pathType: Prefix
-      # One worker: the default four do not fit in the stand's memory.
+      # One worker and no job runner (GenAI online scoring: seven ~220 MB processes); 1.5 GB -> ~400 MB.
+      extraEnvVars:
+        MLFLOW_SERVER_ENABLE_JOB_EXECUTION: "false"
       extraArgs:
         workers: "1"
       corsAllowedOrigins: ["http://mlflow.localhost:8090"]
