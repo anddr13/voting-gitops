@@ -36,7 +36,7 @@ services:
     http: true
     replicas: 2
     env:
-      RATE_LIMIT_SECONDS: "3s"
+      RATE_LIMIT_SECONDS: "3"
     resources:
       requests: { cpu: 50m, memory: 128Mi }
       limits: { memory: 512Mi }
