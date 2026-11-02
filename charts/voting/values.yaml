@@ -1,7 +1,7 @@
 image:
   registry: ghcr.io/anddr13
   # Bumped by the voting-app CI on every merge to main.
-  tag: 43cf38713de1d78e743fb93169797ffcd2f01947
+  tag: 58f7ebbc0ea2e3ea146f92de4356662c4c4540bb
 
 cloudName: local
 voteOptions: cat,dog
