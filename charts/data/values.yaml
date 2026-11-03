@@ -31,8 +31,8 @@ topics:
 redis:
   image: redis:8.6-alpine
   resources:
-    requests: { cpu: 25m, memory: 64Mi }
-    limits: { memory: 128Mi }
+    requests: { cpu: 25m, memory: 10Mi }
+    limits: { memory: 10Mi }
 
 postgres:
   name: voting-pg
